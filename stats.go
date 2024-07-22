@@ -304,7 +304,7 @@ func (s *statsEntry) serialize() map[string]interface{} {
 
 func (s *statsEntry) getStrippedReport() map[string]interface{} {
 	report := s.serialize()
-	s.reset()
+	//s.reset()
 	return report
 }
 

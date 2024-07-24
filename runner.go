@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"math/rand"
 	"os"
 	"runtime"
 	"runtime/debug"
@@ -140,7 +141,6 @@ func (r *runner) addWorkers(gapCount int) {
 			ctx, cancel := context.WithCancel(context.TODO())
 			r.cancelFuncs = append(r.cancelFuncs, cancel)
 			go func(ctx context.Context) {
-				index := 0
 				for {
 					select {
 					case <-ctx.Done():
@@ -151,25 +151,51 @@ func (r *runner) addWorkers(gapCount int) {
 						if r.rateLimitEnabled {
 							blocked := r.rateLimiter.Acquire()
 							if !blocked {
-								task := r.getTask(index)
+								task := r.getTaskToScale()
 								r.safeRun(task.Fn)
-								index++
-								if index == r.totalTaskWeight {
-									index = 0
-								}
 							}
 						} else {
-							task := r.getTask(index)
+							task := r.getTaskToScale()
 							r.safeRun(task.Fn)
-							index++
-							if index == r.totalTaskWeight {
-								index = 0
-							}
 						}
 					}
 					runtime.Gosched()
 				}
 			}(ctx)
+			//default:
+			//	ctx, cancel := context.WithCancel(context.TODO())
+			//	r.cancelFuncs = append(r.cancelFuncs, cancel)
+			//	go func(ctx context.Context) {
+			//		index := 0
+			//		for {
+			//			select {
+			//			case <-ctx.Done():
+			//				return
+			//			case <-r.shutdownChan:
+			//				return
+			//			default:
+			//				if r.rateLimitEnabled {
+			//					blocked := r.rateLimiter.Acquire()
+			//					if !blocked {
+			//						task := r.getTask(index)
+			//						r.safeRun(task.Fn)
+			//						index++
+			//						if index == r.totalTaskWeight {
+			//							index = 0
+			//						}
+			//					}
+			//				} else {
+			//					task := r.getTask(index)
+			//					r.safeRun(task.Fn)
+			//					//index++
+			//					//if index == r.totalTaskWeight {
+			//					//	index = 0
+			//					//}
+			//				}
+			//			}
+			//			runtime.Gosched()
+			//		}
+			//	}(ctx)
 		}
 	}
 }
@@ -246,6 +272,34 @@ func (r *runner) getTask(index int) *Task {
 	return r.runTask[index]
 }
 
+func (r *runner) getTaskToScale() *Task {
+	if len(r.tasks) == 1 {
+		return r.tasks[0]
+	} else {
+		weightSum := 0
+		for _, task := range r.tasks {
+			if task.Weight <= 0 { //确保用户输入的值合法
+				task.Weight = 1
+			}
+			weightSum += task.Weight
+		}
+		r.totalTaskWeight = weightSum
+
+		r.runTask = make([]*Task, r.totalTaskWeight)
+		rate := rand.Float64() * float64(r.totalTaskWeight)
+		accumPercentage := 0.0
+		for _, task := range r.tasks {
+			if task.Weight > 0 {
+				accumPercentage += float64(task.Weight)
+				if rate < accumPercentage {
+					return task
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
 	Events.Publish(EVENT_SPAWN, spawnCount, spawnRate)
 
@@ -270,7 +324,11 @@ type localRunner struct {
 func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, spawnCount int, spawnRate float64) (r *localRunner) {
 	r = &localRunner{}
 	r.setLogger(log.Default())
-	r.setTasks(tasks)
+
+	//r.setTasks(tasks)
+
+	r.tasks = tasks
+
 	r.spawnRate = spawnRate
 	r.spawnCount = spawnCount
 	r.shutdownChan = make(chan bool)

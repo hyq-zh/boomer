@@ -345,7 +345,7 @@ func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, spawnCount int, spaw
 func (r *localRunner) run() {
 	r.state = stateInit
 	r.stats.start()
-	r.outputOnStart()
+	//r.outputOnStart()
 
 	wg := sync.WaitGroup{}
 	wg.Add(1)
@@ -354,12 +354,12 @@ func (r *localRunner) run() {
 			select {
 			case data := <-r.stats.messageToRunnerChan:
 				data["user_count"] = r.numClients
-				r.outputOnEevent(data)
+				//r.outputOnEevent(data)
 			case <-r.shutdownChan:
 				Events.Publish(EVENT_QUIT)
 				r.stop()
 				wg.Done()
-				r.outputOnStop()
+				//r.outputOnStop()
 				return
 			}
 		}

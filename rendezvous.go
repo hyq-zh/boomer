@@ -20,7 +20,9 @@ type RendezvousPoint struct {
 func NewRendezvousPoint(name string, threshold int64) *RendezvousPoint {
 	_, ok := RendezvousPoints[name]
 	if ok {
-		return RendezvousPoints[name]
+		if RendezvousPoints[name].currentThreshold > 0 {
+			return RendezvousPoints[name]
+		}
 	}
 	rendezvousPoint := &RendezvousPoint{
 		threshold:        threshold,

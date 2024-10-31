@@ -348,7 +348,7 @@ func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, spawnCount int, spaw
 	r = &localRunner{}
 	r.setLogger(log.Default())
 
-	r.setTasks(tasks)
+	//r.setTasks(tasks)
 
 	r.tasks = tasks
 
@@ -431,7 +431,7 @@ func newSlaveRunner(masterHost string, masterPort int, tasks []*Task, rateLimite
 	r.setLogger(log.Default())
 	r.masterHost = masterHost
 	r.masterPort = masterPort
-	r.setTasks(tasks)
+	//r.setTasks(tasks)
 	r.waitForAck = sync.WaitGroup{}
 	r.nodeID = getNodeID()
 	r.shutdownChan = make(chan bool)

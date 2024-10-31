@@ -151,12 +151,16 @@ func (r *runner) addWorkers(gapCount int) {
 						if r.rateLimitEnabled {
 							blocked := r.rateLimiter.Acquire()
 							if !blocked {
-								task := r.getTaskToScale()
+								task := r.getTasks()
 								r.safeRun(task.Fn)
+								close(r.shutdownChan)
+
 							}
 						} else {
-							task := r.getTaskToScale()
+							task := r.getTasks()
 							r.safeRun(task.Fn)
+							close(r.shutdownChan)
+
 						}
 					}
 					runtime.Gosched()
@@ -211,7 +215,6 @@ func (r *runner) reduceWorkers(gapCount int) {
 	}
 
 	r.cancelFuncs = r.cancelFuncs[:num]
-
 }
 
 func (r *runner) spawnWorkers(spawnCount int, spawnCompleteFunc func()) {
@@ -237,36 +240,32 @@ func (r *runner) spawnWorkers(spawnCount int, spawnCompleteFunc func()) {
 
 // setTasks will set the runner's task list AND the total task weight
 // which is used to get a task later
-func (r *runner) setTasks(t []*Task) {
-	r.tasks = t
-	if len(r.tasks) == 1 {
-		r.totalTaskWeight = 1
-		r.runTask = t
-		return
-	}
-
-	weightSum := 0
-	for _, task := range r.tasks {
-		if task.Weight <= 0 { //Ensure that user input values are legal
-			task.Weight = 1
-		}
-		weightSum += task.Weight
-	}
-	r.totalTaskWeight = weightSum
-
-	r.runTask = make([]*Task, r.totalTaskWeight)
-	index := 0
-	for weightSum > 0 { //Assign task order according to weight
-		for _, task := range r.tasks {
-			if task.Weight > 0 {
-				r.runTask[index] = task
-				index++
-				task.Weight--
-				weightSum--
-			}
-		}
-	}
-}
+//func (r *runner) setTasks(t []*Task) *Task {
+//	if len(r.tasks) == 1 {
+//		return
+//	} else {
+//		weightSum := 0
+//		for _, task := range r.tasks {
+//			if task.Weight <= 0 { //确保用户输入的值合法
+//				task.Weight = 1
+//			}
+//			weightSum += task.Weight
+//		}
+//		r.totalTaskWeight = weightSum
+//		r.runTask = make([]*Task, r.totalTaskWeight)
+//		index := 0
+//		for weightSum > 0 { //Assign task order according to weight
+//			for _, task := range r.tasks {
+//				if task.Weight > 0 {
+//					r.runTask[index] = task
+//					index++
+//					task.Weight--
+//					weightSum--
+//				}
+//			}
+//		}
+//	}
+//}
 
 func (r *runner) getTask(index int) *Task {
 	return r.runTask[index]
@@ -299,6 +298,30 @@ func (r *runner) getTaskToScale() *Task {
 	}
 	return nil
 }
+func (r *runner) getTasks() *Task {
+	if len(r.tasks) == 1 {
+		return r.tasks[0]
+	}
+
+	weightSum := 0
+	for _, task := range r.tasks {
+		if task.Weight <= 0 { //确保用户输入的值合法
+			task.Weight = 1
+		}
+		weightSum += task.Weight
+	}
+	r.totalTaskWeight = weightSum
+
+	randomWeight := rand.Intn(r.totalTaskWeight)
+	currentWeight := 0
+	for _, task := range r.tasks {
+		currentWeight += task.Weight
+		if currentWeight > randomWeight {
+			return task
+		}
+	}
+	return nil // 理论上不会到达这里
+}
 
 func (r *runner) startSpawning(spawnCount int, spawnRate float64, spawnCompleteFunc func()) {
 	Events.Publish(EVENT_SPAWN, spawnCount, spawnRate)
@@ -325,7 +348,7 @@ func newLocalRunner(tasks []*Task, rateLimiter RateLimiter, spawnCount int, spaw
 	r = &localRunner{}
 	r.setLogger(log.Default())
 
-	//r.setTasks(tasks)
+	r.setTasks(tasks)
 
 	r.tasks = tasks
 
